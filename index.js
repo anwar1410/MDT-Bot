@@ -2461,42 +2461,51 @@ client.on(Events.InteractionCreate, async interaction => {
                 await interaction.reply({ content: 'ليس لديك هوية وطنية قم بإنشاء هوية وطنية', ephemeral: true });
                 return;
             }
-            // توليد صورة ديناميكية
-            const canvas = createCanvas(600, 300);
-            const ctx = canvas.getContext('2d');
-            // خلفية بسيطة
-            ctx.fillStyle = '#e6f2e6';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            // صورة avatar بشكل دائري للمستخدم الذي ضغط الزر
-            let avatarURL = 'https://cdn.discordapp.com/embed/avatars/0.png';
-            try {
-                avatarURL = interaction.user.displayAvatarURL({ extension: 'png', size: 128 });
-            } catch {}
-            const avatar = await loadImage(avatarURL);
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(90, 150, 60, 0, Math.PI * 2, true);
-            ctx.closePath();
-            ctx.clip();
-            ctx.drawImage(avatar, 30, 90, 120, 120);
-            ctx.restore();
-            // اسم الشخصية الكامل في الأعلى يسار
-            ctx.font = 'bold 26px Arial';
-            ctx.fillStyle = '#222';
-            ctx.textAlign = 'left';
-            ctx.fillText(identity.fullName, 30, 60);
-            // معلومات على اليمين
-            ctx.font = 'bold 22px Arial';
-            ctx.fillStyle = '#222';
-            ctx.textAlign = 'right';
-            ctx.fillText('*** : الرقم', 570, 100);
-            ctx.fillText(`تاريخ الميلاد : ${identity.day.padStart(2, '0')}/${convertArabicMonthToNumber(identity.month)}/${identity.year}`, 570, 150);
-            ctx.fillText(`المدينة : ${identity.city}`, 570, 200);
-            // إرسال الصورة
-            const buffer = canvas.toBuffer('image/png');
-            const attachment = new AttachmentBuilder(buffer, { name: 'my_id_card.png' });
-            await interaction.reply({ files: [attachment], ephemeral: true });
-            return;
+            // توليد صورة ديناميكية باستخدام Jimp بدلاً من Canvas
+const image = new Jimp(600, 300, '#e6f2e6');
+
+// تحميل الخطوط
+const fontBig = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+const fontMed = await Jimp.loadFont(Jimp.FONT_SANS_16_BLACK);
+
+// تحميل صورة المستخدم
+let avatarURL = 'https://cdn.discordapp.com/embed/avatars/0.png';
+try {
+  avatarURL = interaction.user.displayAvatarURL({ extension: 'png', size: 128 });
+} catch {}
+try {
+  let avatar = await Jimp.read(avatarURL);
+  avatar.resize(120, 120);
+  // قناع دائري
+  const mask = new Jimp(120, 120, 0x00000000);
+  for (let x = 0; x < 120; x++) {
+    for (let y = 0; y < 120; y++) {
+      const d = Math.sqrt((x - 60) ** 2 + (y - 60) ** 2);
+      if (d <= 60) mask.setPixelColor(0xFFFFFFFF, x, y);
+    }
+  }
+  avatar.mask(mask, 0, 0);
+  image.composite(avatar, 30, 90);
+} catch {}
+
+// اسم الشخصية الكامل في الأعلى يسار
+image.print(fontBig, 30, 60, identity.fullName);
+
+// معلومات على اليمين
+image.print(fontMed, 400, 100, '**** - الرقم');
+image.print(
+  fontMed,
+  400,
+  140,
+  `تاريخ الميلاد: ${identity.day.padStart(2, '0')}/${convertArabicMonthToNumber(identity.month)}/${identity.year}`
+);
+image.print(fontMed, 400, 180, `المدينة: ${identity.city}`);
+
+// إرسال الصورة
+const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
+const attachment = new AttachmentBuilder(buffer, { name: 'my_id_card.png' });
+await interaction.reply({ files: [attachment], ephemeral: true });
+return;
         }
         
         if (interaction.values[0] === 'my_national_id') {
